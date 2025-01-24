@@ -92,40 +92,38 @@
                         alignment: ''
                     };
                     
-                    let currentSection = '';
+                    let currentSection = null;
                     
                     lines.forEach(line => {
                         line = line.trim();
-                        if (line.match(/^\d+\./)) {
-                            programEntry.name = line.replace(/^\d+\./, '').trim();
-                        } else if (line.includes('Program Description:')) {
+                        if (line.match(/^\d+\.\s*Program Name:/)) {
+                            programEntry.name = line.split('Program Name:')[1].trim();
+                        } else if (line.startsWith('Description:')) {
                             currentSection = 'description';
-                            programEntry.description = line.replace('Program Description:', '').trim();
-                        } else if (line.includes('Key Positions Involved:')) {
+                            programEntry.description = line.replace('Description:', '').trim();
+                        } else if (line.startsWith('Key Positions:')) {
                             currentSection = 'positions';
-                            programEntry.positions = line.replace('Key Positions Involved:', '').trim();
-                        } else if (line.includes('Website Content:') || line.includes('Alignment with Website Content:')) {
+                            programEntry.positions = line.replace('Key Positions:', '').trim();
+                        } else if (line.includes('Website Alignment:')) {
                             currentSection = 'alignment';
-                            programEntry.alignment = line.replace(/(?:Alignment with )?Website Content:/, '').trim();
+                            programEntry.alignment = line.replace('Website Alignment:', '').trim();
                         } else if (line && currentSection) {
-                            programEntry[currentSection] += ' ' + line;
+                            programEntry[currentSection] += ' ' + line.trim();
                         }
                     });
 
                     data.push([
                         dept,
-                        programEntry.name,
-                        programEntry.description,
-                        programEntry.positions,
-                        programEntry.alignment
+                        programEntry.name || 'Unnamed Program',
+                        programEntry.description || 'No description available',
+                        programEntry.positions || 'No positions specified',
+                        programEntry.alignment || 'No alignment information available'
                     ]);
                 });
             });
 
             const worksheet = XLSX.utils.aoa_to_sheet(data);
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Programs');
-
-            // Generate Excel file
             XLSX.writeFile(workbook, 'program_predictions.xlsx');
         }
 
@@ -176,7 +174,7 @@
                         // Parse the content string into individual programs
                         if (info.programs && info.programs.content) {
                             const programText = info.programs.content;
-                            const programs = programText.split(/\n(?=\d+\.\s*(?:Program Name:|[A-Za-z]))/).filter(p => p.trim());
+                            const programs = programText.split(/\n(?=\d+\.\s*Program Name:)/).filter(p => p.trim());
                             
                             programs.forEach((program, index) => {
                                 const lines = program.split('\n');
@@ -187,28 +185,25 @@
                                     alignment: ''
                                 };
                                 
-                                let currentSection = '';
+                                let currentSection = null;
                                 
                                 lines.forEach(line => {
                                     line = line.trim();
-                                    if (line.match(/^\d+\./)) {
-                                        programData.name = line.replace(/^\d+\./, '').trim();
-                                    } else if (line.includes('Program Description:')) {
+                                    if (line.match(/^\d+\.\s*Program Name:/)) {
+                                        programData.name = line.split('Program Name:')[1].trim();
+                                    } else if (line.startsWith('Description:')) {
                                         currentSection = 'description';
-                                        programData.description = line.replace('Program Description:', '').trim();
-                                    } else if (line.includes('Key Positions Involved:')) {
+                                        programData.description = line.replace('Description:', '').trim();
+                                    } else if (line.startsWith('Key Positions:')) {
                                         currentSection = 'positions';
-                                        programData.positions = line.replace('Key Positions Involved:', '').trim();
-                                    } else if (line.includes('Website Content:') || line.includes('Alignment with Website Content:')) {
+                                        programData.positions = line.replace('Key Positions:', '').trim();
+                                    } else if (line.includes('Website Alignment:')) {
                                         currentSection = 'alignment';
-                                        programData.alignment = line.replace(/(?:Alignment with )?Website Content:/, '').trim();
+                                        programData.alignment = line.replace('Website Alignment:', '').trim();
                                     } else if (line && currentSection) {
-                                        programData[currentSection] += ' ' + line;
+                                        programData[currentSection] += ' ' + line.trim();
                                     }
                                 });
-
-                                // Clean up description
-                                programData.description = (programData.description || '').split(/- Key Positions Involved:/)[0].split(/- Alignment with Website Content:/)[0].trim();
 
                                 html += `
                                     <div class="border-l-4 border-indigo-500 pl-4 py-4 mb-6 bg-white rounded-r-lg shadow-sm">

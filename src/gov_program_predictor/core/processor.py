@@ -68,10 +68,7 @@ class ProgramPredictor:
             raise
 
     def fetch_website_content(self, url: str) -> dict:
-        """
-        Fetch and process content from a government website.
-        Returns a dictionary of relevant content.
-        """
+        """Fetch and process content from a government website."""
         try:
             # Add headers to mimic a browser
             headers = {
@@ -81,23 +78,19 @@ class ProgramPredictor:
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1'
             }
-            # Fetch the webpage
             response = requests.get(url, headers=headers, verify=False)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Extract relevant content
             content = {
                 'page_title': soup.title.string if soup.title else '',
                 'main_content': [],
                 'department_specific': []
             }
             
-            # Look for main content
             main_content = soup.find_all(['p', 'h1', 'h2', 'h3', 'div'], class_=re.compile(r'content|main|text'))
             content['main_content'] = [elem.get_text(strip=True) for elem in main_content if elem.get_text(strip=True)]
             
-            # Look specifically for finance-related content
             finance_content = soup.find_all(
                 text=re.compile(r'finance|budget|grant|payment|bill', re.IGNORECASE)
             )
@@ -115,7 +108,7 @@ class ProgramPredictor:
 
     def predict_programs_for_department(self, positions: list, department: str, website_content: dict = None, num_programs: int = 5):
         """Predict programs based on position titles and website content."""
-    
+        
         # Prepare the base prompt without the website content first
         base_prompt = """
         You must generate EXACTLY {num_programs} programs based on the following information about the {department}.
@@ -127,33 +120,34 @@ class ProgramPredictor:
         For each program, provide the following in a clear numbered format:
 
         Program Structure (repeat this {num_programs} times, numbered 1 through {num_programs}):
-        1. Program Name: [Name]
-        Description: [Description]
-        Key Positions: [Positions]
-        Website Alignment: [Alignment]
+        1. Program Name: [A clear, specific program name]
+        Description: [A detailed program description explaining the program's purpose, functions, and services]
+        Key Positions: [Specific positions from the provided list that are involved in this program]
+        Website Alignment: [How this program aligns with the website content provided]
 
         Please ensure:
         1. Exactly {num_programs} programs are generated
         2. Programs are numbered 1 through {num_programs}
         3. Each program has all four elements (Name, Description, Positions, Alignment)
         4. No program information is combined or merged
+        5. Each description is detailed and specific
         """
 
         # Add website content section if available
         if website_content:
             base_prompt += """
-        
+            
             Relevant Website Content:
             {website_content}
             """
 
         prompt = ChatPromptTemplate.from_template(base_prompt)
-    
+        
         # Prepare the website content if available
         website_text = "\n".join(website_content['department_specific']) if website_content else ""
-    
+        
         chain = prompt | self.llm
-    
+        
         try:
             result = chain.invoke({
                 "department": department,
@@ -161,15 +155,14 @@ class ProgramPredictor:
                 "num_programs": num_programs,
                 "website_content": website_text
             })
-        
+            
             print(f"\nPredicted Programs for {department}:")
             print(result)
             return result
-        
+            
         except Exception as e:
             print(f"Error predicting programs: {str(e)}")
             raise
-
 
 # Test the processing
 if __name__ == "__main__":
@@ -182,16 +175,6 @@ if __name__ == "__main__":
         website_url = input("\nEnter the government organization's website URL: ")
         website_content = predictor.fetch_website_content(website_url)
         
-        # Get number of programs from user
-        while True:
-            try:
-                num_programs = int(input("\nHow many programs would you like to see per department? "))
-                if num_programs > 0:
-                    break
-                print("Please enter a positive number")
-            except ValueError:
-                print("Please enter a valid number")
-        
         # For each department, predict programs
         for dept in metadata['departments']:
             positions = metadata['department_summaries'][dept]['unique_positions']
@@ -199,10 +182,9 @@ if __name__ == "__main__":
             print(f"Analyzing {dept}")
             print(f"{'='*50}")
             programs = predictor.predict_programs_for_department(
-                positions, 
+                positions,
                 dept,
-                website_content=website_content,
-                num_programs=num_programs
+                website_content=website_content
             )
             
     except Exception as e:
