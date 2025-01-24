@@ -12,7 +12,7 @@ import re
 load_dotenv()
 
 class ProgramPredictor:
-    def __init__(self, model_name="gpt-3.5-turbo"):
+    def __init__(self, model_name="gpt-4"):
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=0.7
@@ -118,12 +118,28 @@ class ProgramPredictor:
         
         # Prepare the prompt with optional website content
         base_prompt = """
-        Based on the following information about the {department}, suggest {num_programs} likely programs 
-        that this department runs. Consider how these positions work together to deliver services.
-        
-        Position Titles:
-        {positions}
-        """
+	You must generate EXACTLY {num_programs} programs based on the following information about the {department}. 
+	This is very important - the output must contain precisely {num_programs} numbered programs, no more and no less.
+
+	Position Titles:
+	{positions}
+
+	{website_content_prompt}
+
+	For each program, provide the following in a clear numbered format:
+
+	Program Structure (repeat this {num_programs} times, numbered 1 through {num_programs}):
+	1. Program Name: [Name]
+	Description: [Description]
+	Key Positions: [Positions]
+	Website Alignment: [Alignment]
+
+	Please ensure:
+	1. Exactly {num_programs} programs are generated
+	2. Programs are numbered 1 through {num_programs}
+	3. Each program has all four elements (Name, Description, Positions, Alignment)
+	4. No program information is combined or merged
+	"""
         
         if website_content:
             base_prompt += """
@@ -131,17 +147,6 @@ class ProgramPredictor:
             Relevant Website Content:
             {website_content}
             """
-        
-        base_prompt += """
-        
-        For each program, provide:
-        1. Program Name
-        2. Program Description
-        3. Key Positions Involved
-        4. Alignment with Website Content (if available)
-        
-        Format your response as a numbered list with these components for each program.
-        """
         
         prompt = ChatPromptTemplate.from_template(base_prompt)
         
