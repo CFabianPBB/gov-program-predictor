@@ -115,46 +115,45 @@ class ProgramPredictor:
 
     def predict_programs_for_department(self, positions: list, department: str, website_content: dict = None, num_programs: int = 5):
         """Predict programs based on position titles and website content."""
-        
-        # Prepare the prompt with optional website content
+    
+        # Prepare the base prompt without the website content first
         base_prompt = """
-	You must generate EXACTLY {num_programs} programs based on the following information about the {department}. 
-	This is very important - the output must contain precisely {num_programs} numbered programs, no more and no less.
+        You must generate EXACTLY {num_programs} programs based on the following information about the {department}.
+        This is very important - the output must contain precisely {num_programs} numbered programs, no more and no less.
 
-	Position Titles:
-	{positions}
+        Position Titles:
+        {positions}
 
-	{website_content_prompt}
+        For each program, provide the following in a clear numbered format:
 
-	For each program, provide the following in a clear numbered format:
+        Program Structure (repeat this {num_programs} times, numbered 1 through {num_programs}):
+        1. Program Name: [Name]
+        Description: [Description]
+        Key Positions: [Positions]
+        Website Alignment: [Alignment]
 
-	Program Structure (repeat this {num_programs} times, numbered 1 through {num_programs}):
-	1. Program Name: [Name]
-	Description: [Description]
-	Key Positions: [Positions]
-	Website Alignment: [Alignment]
+        Please ensure:
+        1. Exactly {num_programs} programs are generated
+        2. Programs are numbered 1 through {num_programs}
+        3. Each program has all four elements (Name, Description, Positions, Alignment)
+        4. No program information is combined or merged
+        """
 
-	Please ensure:
-	1. Exactly {num_programs} programs are generated
-	2. Programs are numbered 1 through {num_programs}
-	3. Each program has all four elements (Name, Description, Positions, Alignment)
-	4. No program information is combined or merged
-	"""
-        
+        # Add website content section if available
         if website_content:
             base_prompt += """
-            
+        
             Relevant Website Content:
             {website_content}
             """
-        
+
         prompt = ChatPromptTemplate.from_template(base_prompt)
-        
+    
         # Prepare the website content if available
         website_text = "\n".join(website_content['department_specific']) if website_content else ""
-        
+    
         chain = prompt | self.llm
-        
+    
         try:
             result = chain.invoke({
                 "department": department,
@@ -162,14 +161,15 @@ class ProgramPredictor:
                 "num_programs": num_programs,
                 "website_content": website_text
             })
-            
+        
             print(f"\nPredicted Programs for {department}:")
             print(result)
             return result
-            
+        
         except Exception as e:
             print(f"Error predicting programs: {str(e)}")
             raise
+
 
 # Test the processing
 if __name__ == "__main__":
