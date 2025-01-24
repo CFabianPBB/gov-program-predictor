@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Government Program Predictor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8 text-center">Government Program Predictor</h1>
+        
+        <div class="max-w-xl mx-auto bg-white rounded-lg shadow-md p-6">
+            <form id="predictForm" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Personnel Data File</label>
+                    <input type="file" name="file" accept=".xlsx,.csv" required
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Website URL</label>
+                    <input type="url" name="website_url" required
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="https://www.example.gov">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Programs per Department</label>
+                    <input type="number" name="num_programs" required min="1" max="20" value="5"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <button type="submit"
+                        class="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Predict Programs
+                </button>
+            </form>
+
+            <div id="loading" class="loading mt-4 text-center">
+                <p class="text-gray-600">Processing... Please wait.</p>
+            </div>
+
+            <div id="results" class="mt-6 space-y-4"></div>
+        </div>
+    </div>
+    <script>
+        document.getElementById('predictForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+        
+            const form = e.target;
+            const formData = new FormData(form);
+        
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').innerHTML = '';
+        
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+            
+                const data = await response.json();
+            
+                // Display results in a formatted way
+                const resultsDiv = document.getElementById('results');
+            
+                if (data.status === "success") {
+                    let html = `
+                        <div class="bg-green-50 p-4 rounded-md mb-4">
+                            <p class="text-green-700">${data.message}</p>
+                            <p class="text-green-600 text-sm">${data.note}</p>
+                        </div>
+                    `; 
+                
+                    // For each department
+                    Object.entries(data.results).forEach(([dept, info]) => {
+                        html += `
+                            <div class="border rounded-lg p-4 mb-4 bg-white">
+                                <h2 class="text-xl font-bold mb-2">${dept}</h2>
+                                <p class="text-gray-600 mb-4">
+                                    ${info.total_positions} total positions • 
+                                    ${info.unique_positions} unique positions
+                                </p>
+                            
+                                <div class="space-y-4">
+                        `;
+                    
+                        // Parse the content string into individual programs
+                        const programsContent = info.programs.content;
+                        const programs = programsContent.split(/(?=\n\d+\.)/).filter(p => p.trim());
+                    
+                        programs.forEach(program => {
+                            const lines = program.trim().split('\n');
+                            const [title, ...details] = lines;
+                        
+                            html += `
+                                <div class="border-l-4 border-indigo-500 pl-4 py-2">
+                                    <h3 class="font-semibold text-lg">${title}</h3>
+                                    <div class="mt-2 text-gray-700 space-y-1">
+                                        ${details.map(d => `<p>${d}</p>`).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    });
+                
+                    resultsDiv.innerHTML = html;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="bg-red-50 p-4 rounded-md">
+                            <p class="text-red-700">${data.message}</p>
+                            <p class="text-red-600 text-sm">${data.details || ''}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('results').innerHTML = `
+                    <div class="bg-red-50 p-4 rounded-md">
+                        <p class="text-red-700">Error processing request</p>
+                        <p class="text-red-600 text-sm">${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
