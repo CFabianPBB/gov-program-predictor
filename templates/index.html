@@ -5,17 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Government Program Predictor</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/styles.css">
-</head>
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Government Program Predictor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        .program-section {
+            padding: 8px 0;
+        }
+        
+        .program-section:not(:last-child) {
+            border-bottom: 1px solid #edf2f7;
+        }
+        
         .loading {
             display: none;
         }
@@ -59,36 +57,37 @@
             <div id="results" class="mt-6 space-y-4"></div>
         </div>
     </div>
+
     <script>
         document.getElementById('predictForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-        
+            
             const form = e.target;
             const formData = new FormData(form);
-        
+            
             // Show loading
             document.getElementById('loading').style.display = 'block';
             document.getElementById('results').innerHTML = '';
-        
+            
             try {
                 const response = await fetch('/predict', {
                     method: 'POST',
                     body: formData
                 });
-            
+                
                 const data = await response.json();
-            
+                
                 // Display results in a formatted way
                 const resultsDiv = document.getElementById('results');
-            
+                
                 if (data.status === "success") {
                     let html = `
                         <div class="bg-green-50 p-4 rounded-md mb-4">
                             <p class="text-green-700">${data.message}</p>
                             <p class="text-green-600 text-sm">${data.note}</p>
                         </div>
-                    `; 
-                
+                    `;
+                    
                     // For each department
                     Object.entries(data.results).forEach(([dept, info]) => {
                         html += `
@@ -98,34 +97,75 @@
                                     ${info.total_positions} total positions • 
                                     ${info.unique_positions} unique positions
                                 </p>
-                            
+                                
                                 <div class="space-y-4">
                         `;
-                    
-                        // Parse the content string into individual programs
-                        const programsContent = info.programs.content;
-                        const programs = programsContent.split(/(?=\n\d+\.)/).filter(p => p.trim());
-                    
-                        programs.forEach(program => {
-                            const lines = program.trim().split('\n');
-                            const [title, ...details] = lines;
                         
+                        // Parse programs
+                        const programs = info.programs.content.split(/\n(?=\d+\.)/).filter(p => p.trim());
+                        
+                        programs.forEach((program) => {
+                            const lines = program.trim().split('\n').map(line => line.trim());
+                            const sections = {};
+                            let currentSection = null;
+                            
+                            lines.forEach(line => {
+                                if (line.startsWith('Program Name:')) {
+                                    sections.name = line.replace('Program Name:', '').trim();
+                                } else if (line.startsWith('Program Description:')) {
+                                    currentSection = 'description';
+                                    sections.description = line.replace('Program Description:', '').trim();
+                                } else if (line.startsWith('Key Positions Involved:')) {
+                                    currentSection = 'positions';
+                                    sections.positions = line.replace('Key Positions Involved:', '').trim();
+                                } else if (line.startsWith('Alignment with Website Content:')) {
+                                    currentSection = 'alignment';
+                                    sections.alignment = line.replace('Alignment with Website Content:', '').trim();
+                                } else if (line.trim() && currentSection) {
+                                    sections[currentSection] += ' ' + line.trim();
+                                }
+                            });
+                            
                             html += `
-                                <div class="border-l-4 border-indigo-500 pl-4 py-2">
-                                    <h3 class="font-semibold text-lg">${title}</h3>
-                                    <div class="mt-2 text-gray-700 space-y-1">
-                                        ${details.map(d => `<p>${d}</p>`).join('')}
+                                <div class="border-l-4 border-indigo-500 pl-4 py-4 mb-6 bg-white rounded-r-lg shadow-sm">
+                                    <div class="space-y-4">
+                                        <h3 class="font-semibold text-xl text-indigo-900">
+                                            ${sections.name || 'Program Name'}
+                                        </h3>
+                                        
+                                        <div class="ml-4 space-y-4">
+                                            <div class="program-section">
+                                                <h4 class="font-medium text-gray-700">Program Description:</h4>
+                                                <p class="mt-1 text-gray-600">
+                                                    ${sections.description || 'No description available'}
+                                                </p>
+                                            </div>
+
+                                            <div class="program-section">
+                                                <h4 class="font-medium text-gray-700">Key Positions Involved:</h4>
+                                                <p class="mt-1 text-gray-600">
+                                                    ${sections.positions || 'No positions specified'}
+                                                </p>
+                                            </div>
+
+                                            <div class="program-section">
+                                                <h4 class="font-medium text-gray-700">Website Alignment:</h4>
+                                                <p class="mt-1 text-gray-600">
+                                                    ${sections.alignment || 'No alignment information available'}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             `;
                         });
-                    
+                        
                         html += `
                                 </div>
                             </div>
                         `;
                     });
-                
+                    
                     resultsDiv.innerHTML = html;
                 } else {
                     resultsDiv.innerHTML = `
@@ -151,3 +191,5 @@
     </script>
 </body>
 </html>
+
+
