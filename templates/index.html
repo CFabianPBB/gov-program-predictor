@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Government Program Predictor</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
     <style>
         .program-section {
             padding: 8px 0;
@@ -40,7 +41,7 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Programs per Department</label>
-                    <input type="number" name="num_programs" required min="1" max="20" value="5"
+                    <input type="number" name="num_programs" required min="1" max="50" value="5"
                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
@@ -55,10 +56,79 @@
             </div>
 
             <div id="results" class="mt-6 space-y-4"></div>
+            
+            <!-- Export Button (hidden by default) -->
+            <div id="exportContainer" class="mt-4 hidden">
+                <button onclick="exportToExcel()" 
+                        class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                    Export to Excel
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
+        let programData = null; // Store the data globally for export
+
+        function exportToExcel() {
+            if (!programData) return;
+
+            const workbook = XLSX.utils.book_new();
+            const data = [];
+
+            // Add headers
+            data.push(['Department', 'Program Name', 'Description', 'Key Positions', 'Website Alignment']);
+
+            // Add data for each program
+            Object.entries(programData.results).forEach(([dept, info]) => {
+                const programs = info.programs.content.split(/\n(?=\d+\.)/).filter(p => p.trim());
+                
+                programs.forEach(program => {
+                    const lines = program.split('\n');
+                    const programEntry = {
+                        name: '',
+                        description: '',
+                        positions: '',
+                        alignment: ''
+                    };
+                    
+                    let currentSection = '';
+                    
+                    lines.forEach(line => {
+                        line = line.trim();
+                        if (line.match(/^\d+\./)) {
+                            programEntry.name = line.replace(/^\d+\./, '').trim();
+                        } else if (line.includes('Program Description:')) {
+                            currentSection = 'description';
+                            programEntry.description = line.replace('Program Description:', '').trim();
+                        } else if (line.includes('Key Positions Involved:')) {
+                            currentSection = 'positions';
+                            programEntry.positions = line.replace('Key Positions Involved:', '').trim();
+                        } else if (line.includes('Website Content:') || line.includes('Alignment with Website Content:')) {
+                            currentSection = 'alignment';
+                            programEntry.alignment = line.replace(/(?:Alignment with )?Website Content:/, '').trim();
+                        } else if (line && currentSection) {
+                            programEntry[currentSection] += ' ' + line;
+                        }
+                    });
+
+                    data.push([
+                        dept,
+                        programEntry.name,
+                        programEntry.description,
+                        programEntry.positions,
+                        programEntry.alignment
+                    ]);
+                });
+            });
+
+            const worksheet = XLSX.utils.aoa_to_sheet(data);
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Programs');
+
+            // Generate Excel file
+            XLSX.writeFile(workbook, 'program_predictions.xlsx');
+        }
+
         document.getElementById('predictForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -68,6 +138,7 @@
             // Show loading
             document.getElementById('loading').style.display = 'block';
             document.getElementById('results').innerHTML = '';
+            document.getElementById('exportContainer').classList.add('hidden');
             
             try {
                 const response = await fetch('/predict', {
@@ -76,7 +147,7 @@
                 });
                 
                 const data = await response.json();
-                console.log('Raw response:', data);  // Debug log
+                programData = data; // Store the data globally
                 
                 // Display results in a formatted way
                 const resultsDiv = document.getElementById('results');
@@ -109,29 +180,35 @@
                             
                             programs.forEach((program, index) => {
                                 const lines = program.split('\n');
-                                const programData = {};
+                                const programData = {
+                                    name: '',
+                                    description: '',
+                                    positions: '',
+                                    alignment: ''
+                                };
                                 
-                                let currentSection = null;
+                                let currentSection = '';
+                                
                                 lines.forEach(line => {
                                     line = line.trim();
-                                    if (line.includes('Program Name:')) {
-                                        programData.name = line.split('Program Name:')[1]?.trim() || 'Unnamed Program';
-                                    } else if (line.includes('Description:')) {
+                                    if (line.match(/^\d+\./)) {
+                                        programData.name = line.replace(/^\d+\./, '').trim();
+                                    } else if (line.includes('Program Description:')) {
                                         currentSection = 'description';
-                                        programData.description = line.split('Description:')[1]?.trim() || '';
-                                    } else if (line.includes('Key Positions:')) {
+                                        programData.description = line.replace('Program Description:', '').trim();
+                                    } else if (line.includes('Key Positions Involved:')) {
                                         currentSection = 'positions';
-                                        programData.positions = line.split('Key Positions:')[1]?.trim() || '';
-                                    } else if (line.includes('Website Alignment:')) {
+                                        programData.positions = line.replace('Key Positions Involved:', '').trim();
+                                    } else if (line.includes('Website Content:') || line.includes('Alignment with Website Content:')) {
                                         currentSection = 'alignment';
-                                        programData.alignment = line.split('Website Alignment:')[1]?.trim() || '';
+                                        programData.alignment = line.replace(/(?:Alignment with )?Website Content:/, '').trim();
                                     } else if (line && currentSection) {
                                         programData[currentSection] += ' ' + line;
-                                    } else if (line.match(/^\d+\./)) {
-                                        // Handle cases where the program name is on the same line as the number
-                                        programData.name = line.replace(/^\d+\./, '').trim();
                                     }
                                 });
+
+                                // Clean up description
+                                programData.description = (programData.description || '').split(/- Key Positions Involved:/)[0].split(/- Alignment with Website Content:/)[0].trim();
 
                                 html += `
                                     <div class="border-l-4 border-indigo-500 pl-4 py-4 mb-6 bg-white rounded-r-lg shadow-sm">
@@ -173,6 +250,8 @@
                     });
                     
                     resultsDiv.innerHTML = html;
+                    // Show export button
+                    document.getElementById('exportContainer').classList.remove('hidden');
                 } else {
                     resultsDiv.innerHTML = `
                         <div class="bg-red-50 p-4 rounded-md">
