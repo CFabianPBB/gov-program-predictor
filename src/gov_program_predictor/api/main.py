@@ -10,6 +10,57 @@ import shutil
 import sys
 import os
 
+# Add the parent directory to the Python path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from gov_program_predictor.core.processor import ProgramPredictor
+
+app = FastAPI(title="Government Program Predictor")
+
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Get the absolute path to the project root
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+TEMPLATES_DIR = PROJECT_ROOT / "templates"
+STATIC_DIR = PROJECT_ROOT / "static"
+
+# Ensure directories exist
+TEMPLATES_DIR.mkdir(exist_ok=True)
+STATIC_DIR.mkdir(exist_ok=True)
+UPLOAD_DIR = PROJECT_ROOT / "temp_uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+# Set up templates and static files
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request}
+    )
+
+# ... rest of your code remains the same ...
+
+from fastapi import FastAPI, File, UploadFile, Form, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+import uvicorn
+from pathlib import Path
+import tempfile
+import shutil
+import sys
+import os
+
 # Add the parent directory to the Python path so we can import the ProgramPredictor
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from gov_program_predictor.core.processor import ProgramPredictor
