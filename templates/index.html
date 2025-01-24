@@ -76,6 +76,7 @@
                 });
                 
                 const data = await response.json();
+                console.log('Raw response:', data);  // Debug log
                 
                 // Display results in a formatted way
                 const resultsDiv = document.getElementById('results');
@@ -101,64 +102,69 @@
                                 <div class="space-y-4">
                         `;
                         
-                        // Parse programs
-                        const programs = info.programs.content.split(/\n(?=\d+\.)/).filter(p => p.trim());
-                        
-                        programs.forEach((program) => {
-                            const lines = program.trim().split('\n').map(line => line.trim());
-                            const sections = {};
-                            let currentSection = null;
+                        // Parse the content string into individual programs
+                        if (info.programs && info.programs.content) {
+                            const programText = info.programs.content;
+                            const programs = programText.split(/\n(?=\d+\.\s*(?:Program Name:|[A-Za-z]))/).filter(p => p.trim());
                             
-                            lines.forEach(line => {
-                                if (line.startsWith('Program Name:')) {
-                                    sections.name = line.replace('Program Name:', '').trim();
-                                } else if (line.startsWith('Program Description:')) {
-                                    currentSection = 'description';
-                                    sections.description = line.replace('Program Description:', '').trim();
-                                } else if (line.startsWith('Key Positions Involved:')) {
-                                    currentSection = 'positions';
-                                    sections.positions = line.replace('Key Positions Involved:', '').trim();
-                                } else if (line.startsWith('Alignment with Website Content:')) {
-                                    currentSection = 'alignment';
-                                    sections.alignment = line.replace('Alignment with Website Content:', '').trim();
-                                } else if (line.trim() && currentSection) {
-                                    sections[currentSection] += ' ' + line.trim();
-                                }
-                            });
-                            
-                            html += `
-                                <div class="border-l-4 border-indigo-500 pl-4 py-4 mb-6 bg-white rounded-r-lg shadow-sm">
-                                    <div class="space-y-4">
+                            programs.forEach((program, index) => {
+                                const lines = program.split('\n');
+                                const programData = {};
+                                
+                                let currentSection = null;
+                                lines.forEach(line => {
+                                    line = line.trim();
+                                    if (line.includes('Program Name:')) {
+                                        programData.name = line.split('Program Name:')[1]?.trim() || 'Unnamed Program';
+                                    } else if (line.includes('Description:')) {
+                                        currentSection = 'description';
+                                        programData.description = line.split('Description:')[1]?.trim() || '';
+                                    } else if (line.includes('Key Positions:')) {
+                                        currentSection = 'positions';
+                                        programData.positions = line.split('Key Positions:')[1]?.trim() || '';
+                                    } else if (line.includes('Website Alignment:')) {
+                                        currentSection = 'alignment';
+                                        programData.alignment = line.split('Website Alignment:')[1]?.trim() || '';
+                                    } else if (line && currentSection) {
+                                        programData[currentSection] += ' ' + line;
+                                    } else if (line.match(/^\d+\./)) {
+                                        // Handle cases where the program name is on the same line as the number
+                                        programData.name = line.replace(/^\d+\./, '').trim();
+                                    }
+                                });
+
+                                html += `
+                                    <div class="border-l-4 border-indigo-500 pl-4 py-4 mb-6 bg-white rounded-r-lg shadow-sm">
                                         <h3 class="font-semibold text-xl text-indigo-900">
-                                            ${sections.name || 'Program Name'}
+                                            ${index + 1}. ${programData.name || 'Program Name'}
                                         </h3>
                                         
-                                        <div class="ml-4 space-y-4">
+                                        <div class="ml-4 space-y-4 mt-4">
                                             <div class="program-section">
                                                 <h4 class="font-medium text-gray-700">Program Description:</h4>
                                                 <p class="mt-1 text-gray-600">
-                                                    ${sections.description || 'No description available'}
+                                                    ${programData.description || 'No description available'}
                                                 </p>
                                             </div>
 
                                             <div class="program-section">
                                                 <h4 class="font-medium text-gray-700">Key Positions Involved:</h4>
                                                 <p class="mt-1 text-gray-600">
-                                                    ${sections.positions || 'No positions specified'}
+                                                    ${programData.positions || 'No positions specified'}
                                                 </p>
                                             </div>
 
                                             <div class="program-section">
                                                 <h4 class="font-medium text-gray-700">Website Alignment:</h4>
                                                 <p class="mt-1 text-gray-600">
-                                                    ${sections.alignment || 'No alignment information available'}
+                                                    ${programData.alignment || 'No alignment information available'}
                                                 </p>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            `;
-                        });
+                                `;
+                            });
+                        }
                         
                         html += `
                                 </div>
@@ -191,5 +197,3 @@
     </script>
 </body>
 </html>
-
-
