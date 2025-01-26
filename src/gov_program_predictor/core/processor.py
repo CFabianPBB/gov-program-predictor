@@ -12,7 +12,7 @@ import re
 load_dotenv()
 
 class ProgramPredictor:
-    def __init__(self, model_name="gpt-4-32k"):
+    def __init__(self, model_name="gpt-4-turbo-preview"):
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=0.7
