@@ -22,16 +22,9 @@ class ProgramPredictor:
             print(f"Reading file: {file_path}")
             df = pd.read_excel(file_path)
             
-            # Clean column names by stripping whitespace and handling special characters
+            # Clean column names
             df.columns = df.columns.str.strip().str.replace('\n', ' ').str.replace('\r', '')
-            print("Cleaned column names:", df.columns.tolist())
-            
-            # Print debug information
             print("Available columns:", df.columns.tolist())
-            print("First few rows of data:")
-            print(df.head())
-            print("\nChecking for null values:")
-            print(df.isnull().sum())
             
             # Basic data validation
             required_columns = ['Department', 'Division', 'Position Name']
@@ -41,12 +34,6 @@ class ProgramPredictor:
                 print(f"Looking for '{col}' in columns:", [f"'{c}'" for c in df.columns])
                 if col not in df.columns:
                     raise ValueError(f"Required column '{col}' not found in the Excel file")
-                
-            # Check for empty values
-            if df['Department'].isnull().any():
-                print("Warning: Found null values in Department column")
-                # Fill null values or handle them as needed
-                df['Department'] = df['Department'].fillna('Unknown')
             
             # Generate metadata about the file
             try:
@@ -73,15 +60,33 @@ class ProgramPredictor:
             print(f"File exists: {file_path.exists()}")
             raise
 
+    def generate_department_summary(self, df: pd.DataFrame, department: str) -> dict:
+        """Generate a summary for a specific department."""
+        dept_data = df[df['Department'] == department]
+        return {
+            'department': department,
+            'position_count': len(dept_data),
+            'divisions': dept_data['Division'].unique().tolist(),
+            'positions': dept_data['Position Name'].unique().tolist()
+        }
+
     def predict_programs_for_department(self, df: pd.DataFrame, website_url: str, programs_per_department: int) -> str:
         """Predict programs based on personnel data and website."""
         try:
+            department_summaries = []
+            for dept in df['Department'].unique():
+                summary = self.generate_department_summary(df, dept)
+                department_summaries.append(summary)
+
             # Create prompt for the LLM
             prompt = ChatPromptTemplate.from_template("""
 Based on the following department information and website:
 
 Personnel Data:
 {personnel_data}
+
+Department Summaries:
+{department_summaries}
 
 Website: {website_url}
 
@@ -95,14 +100,16 @@ For each program include:
 Format each program with clear section breaks.
 """)
             
-            # Convert DataFrame to string representation
+            # Convert data to string representations
             personnel_str = df.to_string()
+            summaries_str = "\n".join([str(summary) for summary in department_summaries])
             
             # Create the chain and invoke it
             chain = prompt | self.llm
             
             result = chain.invoke({
                 "personnel_data": personnel_str,
+                "department_summaries": summaries_str,
                 "website_url": website_url,
                 "programs_per_department": programs_per_department
             })
