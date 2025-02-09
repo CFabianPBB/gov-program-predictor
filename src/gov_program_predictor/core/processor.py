@@ -14,19 +14,22 @@ class ProgramPredictor:
             model=model_name,
             temperature=0.7
         )
-    
+
     def process_personnel_data(self, file_path: Path) -> tuple[pd.DataFrame, dict]:
         """Process personnel data from Excel file."""
         try:
             # Read the Excel file
             df = pd.read_excel(file_path)
             
+            # Print columns for debugging
+            print("Available columns:", df.columns.tolist())
+            
             # Generate metadata about the file
             metadata = {
                 'total_positions': len(df),
                 'departments': df['Department'].unique().tolist(),
                 'divisions': df['Division'].unique().tolist(),
-                'unique_titles': df['Position Title'].nunique()
+                'unique_titles': df['Position Name'].nunique()
             }
             
             return df, metadata
@@ -40,22 +43,22 @@ class ProgramPredictor:
         try:
             # Create prompt for the LLM
             prompt = ChatPromptTemplate.from_template("""
-            Based on the following department information and website:
-            
-            Personnel Data:
-            {personnel_data}
-            
-            Website: {website_url}
-            
-            Generate {programs_per_department} detailed program descriptions that this department could realistically implement.
-            For each program include:
-            1. Program Name
-            2. Description
-            3. Key Positions involved
-            4. Website Alignment (how it would be featured on the website)
-            
-            Format each program with clear section breaks.
-            """)
+Based on the following department information and website:
+
+Personnel Data:
+{personnel_data}
+
+Website: {website_url}
+
+Generate {programs_per_department} detailed program descriptions that this department could realistically implement.
+For each program include:
+1. Program Name
+2. Description
+3. Key Positions Involved
+4. Website Alignment (how it would be featured on the website)
+
+Format each program with clear section breaks.
+""")
             
             # Convert DataFrame to string representation
             personnel_str = df.to_string()
@@ -92,12 +95,17 @@ if __name__ == "__main__":
         print("API Test result:", response)
         
         # Then test file processing
-        # Replace 'your_file.xlsx' with your actual filename
-        df, metadata = predictor.process_personnel_data(Path('your_file.xlsx'))
+        file_path = Path('Sample Data - Personnel.xlsx')
+        df, metadata = predictor.process_personnel_data(file_path)
         
         # Show sample of the data
         print("\nFirst few rows of the data:")
         print(df.head())
         
+        # Print metadata
+        print("\nMetadata:")
+        print(metadata)
+        
     except Exception as e:
         print("Error:", str(e))
+        
