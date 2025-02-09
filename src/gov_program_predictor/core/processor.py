@@ -22,6 +22,10 @@ class ProgramPredictor:
             print(f"Reading file: {file_path}")
             df = pd.read_excel(file_path)
             
+            # Clean column names by stripping whitespace and handling special characters
+            df.columns = df.columns.str.strip().str.replace('\n', ' ').str.replace('\r', '')
+            print("Cleaned column names:", df.columns.tolist())
+            
             # Print debug information
             print("Available columns:", df.columns.tolist())
             print("First few rows of data:")
@@ -31,7 +35,10 @@ class ProgramPredictor:
             
             # Basic data validation
             required_columns = ['Department', 'Division', 'Position Name']
+            print("Required columns:", required_columns)
+            print("Column name exact comparison:")
             for col in required_columns:
+                print(f"Looking for '{col}' in columns:", [f"'{c}'" for c in df.columns])
                 if col not in df.columns:
                     raise ValueError(f"Required column '{col}' not found in the Excel file")
                 
