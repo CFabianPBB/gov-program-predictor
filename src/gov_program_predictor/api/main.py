@@ -89,7 +89,7 @@ async def predict_programs(
             
             # Clean up the predictions output for better display
             results[dept] = {
-                'programs': predictions,
+                'programs': {'content': predictions},
                 'total_positions': len(dept_df),
                 'unique_positions': dept_df['Position Name'].nunique()
             }

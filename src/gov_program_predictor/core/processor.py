@@ -72,13 +72,22 @@ Personnel Data:
 Website: {website_url}
 
 Generate {programs_per_department} detailed program descriptions that this department could realistically implement.
-For each program include:
-1. Program Name
-2. Description
-3. Key Positions Involved
-4. Website Alignment (how it would be featured on the website)
 
-Format each program with clear section breaks.
+For each program, use exactly this format:
+
+1. Program Name: [name]
+Description: [description]
+Key Positions: [positions]
+Website Alignment: [alignment]
+
+2. Program Name: [name]
+Description: [description]
+Key Positions: [positions]
+Website Alignment: [alignment]
+
+(and so on for each program)
+
+Make sure to include the numbered prefix and exact section headers as shown above.
 """)
             
             # Convert DataFrame to string representation
