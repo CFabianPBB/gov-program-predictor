@@ -19,23 +19,51 @@ class ProgramPredictor:
         """Process personnel data from Excel file."""
         try:
             # Read the Excel file
+            print(f"Reading file: {file_path}")
             df = pd.read_excel(file_path)
             
-            # Print columns for debugging
+            # Print debug information
             print("Available columns:", df.columns.tolist())
+            print("First few rows of data:")
+            print(df.head())
+            print("\nChecking for null values:")
+            print(df.isnull().sum())
+            
+            # Basic data validation
+            required_columns = ['Department', 'Division', 'Position Name']
+            for col in required_columns:
+                if col not in df.columns:
+                    raise ValueError(f"Required column '{col}' not found in the Excel file")
+                
+            # Check for empty values
+            if df['Department'].isnull().any():
+                print("Warning: Found null values in Department column")
+                # Fill null values or handle them as needed
+                df['Department'] = df['Department'].fillna('Unknown')
             
             # Generate metadata about the file
-            metadata = {
-                'total_positions': len(df),
-                'departments': df['Department'].unique().tolist(),
-                'divisions': df['Division'].unique().tolist(),
-                'unique_titles': df['Position Name'].nunique()
-            }
-            
-            return df, metadata
+            try:
+                departments = df['Department'].unique().tolist()
+                print("Unique departments found:", departments)
+                
+                metadata = {
+                    'total_positions': len(df),
+                    'departments': departments,
+                    'divisions': df['Division'].unique().tolist(),
+                    'unique_titles': df['Position Name'].nunique()
+                }
+                
+                print("Generated metadata:", metadata)
+                return df, metadata
+                
+            except Exception as e:
+                print(f"Error while generating metadata: {str(e)}")
+                raise
             
         except Exception as e:
             print(f"Error processing file: {str(e)}")
+            print(f"File path: {file_path}")
+            print(f"File exists: {file_path.exists()}")
             raise
 
     def predict_programs_for_department(self, df: pd.DataFrame, website_url: str, programs_per_department: int) -> str:
@@ -108,4 +136,3 @@ if __name__ == "__main__":
         
     except Exception as e:
         print("Error:", str(e))
-        
