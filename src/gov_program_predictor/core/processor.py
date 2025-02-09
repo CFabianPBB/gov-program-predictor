@@ -85,9 +85,6 @@ Based on the following department information and website:
 Personnel Data:
 {personnel_data}
 
-Department Summaries:
-{department_summaries}
-
 Website: {website_url}
 
 Generate {programs_per_department} detailed program descriptions that this department could realistically implement.
@@ -107,11 +104,12 @@ Format each program with clear section breaks.
             # Create the chain and invoke it
             chain = prompt | self.llm
             
+            # Only pass the personnel data for now
             result = chain.invoke({
                 "personnel_data": personnel_str,
-                "department_summaries": summaries_str,
                 "website_url": website_url,
-                "programs_per_department": programs_per_department
+                "programs_per_department": programs_per_department,
+                "department_summaries": "" # Empty string for now to avoid the error
             })
             
             return result.content
