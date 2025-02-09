@@ -60,27 +60,11 @@ class ProgramPredictor:
             print(f"File exists: {file_path.exists()}")
             raise
 
-    def generate_department_summary(self, df: pd.DataFrame, department: str) -> dict:
-        """Generate a summary for a specific department."""
-        dept_data = df[df['Department'] == department]
-        return {
-            'department': department,
-            'position_count': len(dept_data),
-            'divisions': dept_data['Division'].unique().tolist(),
-            'positions': dept_data['Position Name'].unique().tolist()
-        }
-
     def predict_programs_for_department(self, df: pd.DataFrame, website_url: str, programs_per_department: int) -> str:
         """Predict programs based on personnel data and website."""
         try:
-            department_summaries = []
-            for dept in df['Department'].unique():
-                summary = self.generate_department_summary(df, dept)
-                department_summaries.append(summary)
-
-            # Create prompt for the LLM
             prompt = ChatPromptTemplate.from_template("""
-Based on the following department information and website:
+Based on the following department personnel data and website:
 
 Personnel Data:
 {personnel_data}
@@ -97,19 +81,16 @@ For each program include:
 Format each program with clear section breaks.
 """)
             
-            # Convert data to string representations
+            # Convert DataFrame to string representation
             personnel_str = df.to_string()
-            summaries_str = "\n".join([str(summary) for summary in department_summaries])
             
             # Create the chain and invoke it
             chain = prompt | self.llm
             
-            # Only pass the personnel data for now
             result = chain.invoke({
                 "personnel_data": personnel_str,
                 "website_url": website_url,
-                "programs_per_department": programs_per_department,
-                "department_summaries": "" # Empty string for now to avoid the error
+                "programs_per_department": programs_per_department
             })
             
             return result.content
