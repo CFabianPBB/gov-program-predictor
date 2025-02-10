@@ -12,7 +12,7 @@
         <h1 class="text-3xl font-bold mb-8 text-center">Government Program Predictor</h1>
         
         <!-- Main Form -->
-        <form id="predictionForm" class="space-y-6 max-w-4xl mx-auto">
+        <form id="predictionForm" class="space-y-6">
             <!-- Departments Container -->
             <div id="departmentsContainer" class="space-y-6">
                 <!-- Department template will be added here dynamically -->
@@ -130,17 +130,18 @@
                 
                 // Collect data from each department
                 document.querySelectorAll('.department-entry').forEach((dept, index) => {
-                    const deptData = {
+                    // Get the file input
+                    const fileInput = dept.querySelector('.dept-file');
+                    if (fileInput.files.length > 0) {
+                        formData.append(`file_${index}`, fileInput.files[0]);
+                    }
+                
+                    // Add department data
+                    departments.push({
                         name: dept.querySelector('.dept-name').value,
                         url: dept.querySelector('.dept-url').value,
-                        programs: dept.querySelector('.dept-programs').value
-                    };
-                    
-                    // Add file to FormData
-                    const file = dept.querySelector('.dept-file').files[0];
-                    formData.append(`file_${index}`, file);
-                    
-                    departments.push(deptData);
+                        programs: parseInt(dept.querySelector('.dept-programs').value)
+                    });
                 });
                 
                 // Add departments data as JSON
@@ -153,7 +154,8 @@
                     });
 
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                     }
 
                     const data = await response.json();
@@ -173,7 +175,7 @@
                 
                 data.forEach(deptResult => {
                     const deptDiv = document.createElement('div');
-                    deptDiv.className = 'bg-white p-6 rounded-lg shadow';
+                    deptDiv.className = 'bg-white p-6 rounded-lg shadow mb-4';
                     
                     deptDiv.innerHTML = `
                         <h2 class="text-2xl font-bold mb-4">${deptResult.department}</h2>
