@@ -12,218 +12,125 @@
         <h1 class="text-3xl font-bold mb-8 text-center">Government Program Predictor</h1>
         
         <!-- Main Form -->
-        <form id="predictionForm" class="space-y-6">
-            <!-- Departments Container -->
-            <div id="departmentsContainer" class="space-y-6">
-                <!-- Department template will be added here dynamically -->
-            </div>
-
-            <!-- Add Department Button -->
-            <div class="flex justify-center">
-                <button type="button" id="addDepartmentBtn" 
-                        class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-                    Add Another Department
-                </button>
-            </div>
-
-            <!-- Submit Button -->
-            <div class="flex justify-center">
-                <button type="submit" 
-                        class="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600">
-                    Generate Predictions
-                </button>
-            </div>
-        </form>
-
-        <!-- Results Section -->
-        <div id="results" class="mt-8 space-y-6"></div>
-    </div>
-
-    <!-- Department Template (hidden) -->
-    <template id="departmentTemplate">
-        <div class="department-entry bg-white p-6 rounded-lg shadow">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold">Department Details</h2>
-                <button type="button" class="remove-dept-btn text-red-500 hover:text-red-700">
-                    Remove
-                </button>
-            </div>
-            
+        <form id="predictionForm" class="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md">
             <div class="space-y-4">
-                <!-- Department Name -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Department Name</label>
-                    <input type="text" required
-                           class="dept-name mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
-                           placeholder="Enter department name">
-                </div>
-
                 <!-- File Upload -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Staff Data (Excel File)</label>
-                    <input type="file" required accept=".xlsx,.xls"
-                           class="dept-file mt-1 block w-full border border-gray-300 rounded-md p-2">
+                    <input type="file" id="fileInput" required accept=".xlsx,.xls"
+                           class="mt-1 block w-full border border-gray-300 rounded-md p-2">
                 </div>
 
                 <!-- Government Website URL -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Government Website URL</label>
-                    <input type="url" required
-                           class="dept-url mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
+                    <input type="url" id="urlInput" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
                            placeholder="https://...">
                 </div>
 
                 <!-- Number of Programs -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Number of Programs</label>
-                    <input type="number" required min="1" max="10"
-                           class="dept-programs mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
+                    <input type="number" id="programsInput" required min="1" max="10"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
                            value="3">
                 </div>
+
+                <!-- Submit Button -->
+                <div class="pt-4">
+                    <button type="submit" 
+                            class="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        Generate Predictions
+                    </button>
+                </div>
             </div>
-        </div>
-    </template>
+        </form>
+
+        <!-- Results Section -->
+        <div id="results" class="mt-8"></div>
+    </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('predictionForm');
-            const deptContainer = document.getElementById('departmentsContainer');
-            const addDeptBtn = document.getElementById('addDepartmentBtn');
-            const template = document.getElementById('departmentTemplate');
+        document.getElementById('predictionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Show loading state
             const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="text-center">Generating predictions...</div>';
+            
+            // Create FormData
+            const formData = new FormData();
+            formData.append('file', document.getElementById('fileInput').files[0]);
+            formData.append('website_url', document.getElementById('urlInput').value);
+            formData.append('num_programs', document.getElementById('programsInput').value);
 
-            // Add initial department
-            addDepartment();
-
-            // Add Department Button Handler
-            addDeptBtn.addEventListener('click', addDepartment);
-
-            // Form Submit Handler
-            form.addEventListener('submit', handleSubmit);
-
-            // Function to add new department
-            function addDepartment() {
-                const deptNode = template.content.cloneNode(true);
-                const deptDiv = deptNode.querySelector('.department-entry');
-                
-                // Add remove button handler
-                deptDiv.querySelector('.remove-dept-btn').addEventListener('click', function() {
-                    if (document.querySelectorAll('.department-entry').length > 1) {
-                        deptDiv.remove();
-                    } else {
-                        alert('At least one department is required');
-                    }
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
                 });
 
-                deptContainer.appendChild(deptDiv);
-            }
-
-            // Function to handle form submission
-            async function handleSubmit(e) {
-                e.preventDefault();
-                
-                // Show loading state
-                resultsDiv.innerHTML = '<div class="text-center">Processing departments...</div>';
-                
-                const formData = new FormData();
-                const departments = [];
-                
-                // Collect data from each department
-                document.querySelectorAll('.department-entry').forEach((dept, index) => {
-                    // Get the file input
-                    const fileInput = dept.querySelector('.dept-file');
-                    if (fileInput.files.length > 0) {
-                        formData.append(`file_${index}`, fileInput.files[0]);
-                    }
-                
-                    // Add department data
-                    departments.push({
-                        name: dept.querySelector('.dept-name').value,
-                        url: dept.querySelector('.dept-url').value,
-                        programs: parseInt(dept.querySelector('.dept-programs').value)
-                    });
-                });
-                
-                // Add departments data as JSON
-                formData.append('departments', JSON.stringify(departments));
-
-                try {
-                    const response = await fetch('/predict', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    displayResults(data);
-                } catch (error) {
-                    resultsDiv.innerHTML = `
-                        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                            Error: ${error.message}
-                        </div>
-                    `;
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            }
 
-            // Function to display results
-            function displayResults(data) {
-                resultsDiv.innerHTML = '';
+                const data = await response.json();
                 
-                data.forEach(deptResult => {
-                    const deptDiv = document.createElement('div');
-                    deptDiv.className = 'bg-white p-6 rounded-lg shadow mb-4';
-                    
-                    deptDiv.innerHTML = `
-                        <h2 class="text-2xl font-bold mb-4">${deptResult.department}</h2>
-                        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            ${deptResult.programs.map(program => `
-                                <div class="border rounded-lg p-4">
-                                    <h3 class="font-bold text-lg mb-2">${program.name}</h3>
-                                    <p class="text-gray-600 mb-2">${program.description}</p>
-                                    <div class="text-sm text-gray-500">
-                                        <p>Budget: ${program.budget}</p>
-                                        <p>Timeline: ${program.timeline}</p>
-                                    </div>
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                // Display results
+                resultsDiv.innerHTML = `
+                    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        ${data.map(program => `
+                            <div class="bg-white p-4 rounded-lg shadow">
+                                <h3 class="font-bold text-lg mb-2">${program.name}</h3>
+                                <p class="text-gray-600 mb-2">${program.description}</p>
+                                <div class="text-sm text-gray-500">
+                                    <p>Budget: ${program.budget}</p>
+                                    <p>Timeline: ${program.timeline}</p>
                                 </div>
-                            `).join('')}
-                        </div>
-                    `;
-                    
-                    resultsDiv.appendChild(deptDiv);
-                });
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button onclick="exportToExcel(${JSON.stringify(data)})" 
+                            class="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                        Export to Excel
+                    </button>
+                `;
 
-                // Add export button
-                const exportBtn = document.createElement('button');
-                exportBtn.className = 'mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600';
-                exportBtn.textContent = 'Export to Excel';
-                exportBtn.onclick = () => exportToExcel(data);
-                resultsDiv.appendChild(exportBtn);
-            }
-
-            // Function to export results to Excel
-            function exportToExcel(data) {
-                const wb = XLSX.utils.book_new();
-                
-                data.forEach(deptResult => {
-                    const wsData = deptResult.programs.map(program => ({
-                        Department: deptResult.department,
-                        'Program Name': program.name,
-                        Description: program.description,
-                        Budget: program.budget,
-                        Timeline: program.timeline
-                    }));
-                    
-                    const ws = XLSX.utils.json_to_sheet(wsData);
-                    XLSX.utils.book_append_sheet(wb, ws, deptResult.department);
-                });
-                
-                XLSX.writeFile(wb, 'program_predictions.xlsx');
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                        Error: ${error.message}
+                    </div>
+                `;
             }
         });
+
+        function exportToExcel(data) {
+            // Create workbook
+            const wb = XLSX.utils.book_new();
+            
+            // Convert data to worksheet format
+            const wsData = data.map(program => ({
+                'Program Name': program.name,
+                'Description': program.description,
+                'Budget': program.budget,
+                'Timeline': program.timeline
+            }));
+            
+            // Create worksheet
+            const ws = XLSX.utils.json_to_sheet(wsData);
+            
+            // Add worksheet to workbook
+            XLSX.utils.book_append_sheet(wb, ws, "Programs");
+            
+            // Save file
+            XLSX.writeFile(wb, "program_predictions.xlsx");
+        }
     </script>
 </body>
 </html>
