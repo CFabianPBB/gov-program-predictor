@@ -6,131 +6,289 @@
     <title>Government Program Predictor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        .program-section {
+            padding: 8px 0;
+        }
+        
+        .program-section:not(:last-child) {
+            border-bottom: 1px solid #edf2f7;
+        }
+        
+        .loading {
+            display: none;
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
     <div class="container mx-auto px-4 py-8">
         <h1 class="text-3xl font-bold mb-8 text-center">Government Program Predictor</h1>
         
-        <!-- Main Form -->
-        <form id="predictionForm" class="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md">
-            <div class="space-y-4">
-                <!-- File Upload -->
+        <div class="max-w-xl mx-auto bg-white rounded-lg shadow-md p-6">
+            <form id="predictForm" class="space-y-6">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Staff Data (Excel File)</label>
-                    <input type="file" id="fileInput" required accept=".xlsx,.xls"
-                           class="mt-1 block w-full border border-gray-300 rounded-md p-2">
+                    <label class="block text-sm font-medium text-gray-700">Personnel Data File</label>
+                    <input type="file" name="file" accept=".xlsx,.csv" required
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
-                <!-- Government Website URL -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Government Website URL</label>
-                    <input type="url" id="urlInput" required
-                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
-                           placeholder="https://...">
+                    <label class="block text-sm font-medium text-gray-700">Website URL</label>
+                    <input type="url" name="website_url" required
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="https://www.example.gov">
                 </div>
 
-                <!-- Number of Programs -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Number of Programs</label>
-                    <input type="number" id="programsInput" required min="1" max="10"
-                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
-                           value="3">
+                    <label class="block text-sm font-medium text-gray-700">Programs per Department</label>
+                    <input type="number" name="num_programs" required min="1" max="50" value="5"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
-                <!-- Submit Button -->
-                <div class="pt-4">
-                    <button type="submit" 
-                            class="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                        Generate Predictions
-                    </button>
-                </div>
+                <button type="submit"
+                        class="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Predict Programs
+                </button>
+            </form>
+
+            <div id="loading" class="loading mt-4 text-center">
+                <p class="text-gray-600">Processing... Please wait.</p>
             </div>
-        </form>
 
-        <!-- Results Section -->
-        <div id="results" class="mt-8"></div>
+            <div id="results" class="mt-6 space-y-4"></div>
+            
+            <!-- Export Button (hidden by default) -->
+            <div id="exportContainer" class="mt-4 hidden">
+                <button onclick="exportToExcel()" 
+                        class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                    Export to Excel
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
-        document.getElementById('predictionForm').addEventListener('submit', async function(e) {
+        let programData = null; // Store the data globally for export
+
+        function exportToExcel() {
+            if (!programData) return;
+
+            const workbook = XLSX.utils.book_new();
+            const data = [];
+
+            // Add headers
+            data.push(['Department', 'Program Name', 'Description', 'Key Positions', 'Website Alignment']);
+
+            // Add data for each program
+            Object.entries(programData.results).forEach(([dept, info]) => {
+                try {
+                    const programs = info.programs.content.split(/\n(?=\d+\.[\s]*(?:Program Name:|[A-Za-z]|$))/).filter(p => {
+                        const trimmed = p.trim();
+                        return trimmed && !trimmed.startsWith('Program Name:');
+                    });
+                    
+                    programs.forEach(program => {
+                        const lines = program.split('\n');
+                        const programEntry = {
+                            name: '',
+                            description: '',
+                            positions: '',
+                            alignment: ''
+                        };
+                        
+                        let currentSection = null;
+                        
+                        lines.forEach(line => {
+                            line = line.trim();
+                            if (line.match(/^\d+\.\s*Program Name:/)) {
+                                programEntry.name = line.split('Program Name:')[1].trim();
+                            } else if (line.startsWith('Description:')) {
+                                currentSection = 'description';
+                                programEntry.description = line.replace('Description:', '').trim();
+                            } else if (line.startsWith('Key Positions:')) {
+                                currentSection = 'positions';
+                                programEntry.positions = line.replace('Key Positions:', '').trim();
+                            } else if (line.includes('Website Alignment:')) {
+                                currentSection = 'alignment';
+                                programEntry.alignment = line.replace('Website Alignment:', '').trim();
+                            } else if (line && currentSection) {
+                                programEntry[currentSection] += ' ' + line.trim();
+                            }
+                        });
+
+                        data.push([
+                            dept,
+                            programEntry.name || 'Unnamed Program',
+                            programEntry.description || 'No description available',
+                            programEntry.positions || 'No positions specified',
+                            programEntry.alignment || 'No alignment information available'
+                        ]);
+                    });
+                } catch (error) {
+                    console.error(`Error processing department ${dept}:`, error);
+                }
+            });
+
+            const worksheet = XLSX.utils.aoa_to_sheet(data);
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Programs');
+            XLSX.writeFile(workbook, 'program_predictions.xlsx');
+        }
+
+        document.getElementById('predictForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            // Show loading state
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '<div class="text-center">Generating predictions...</div>';
+            const form = e.target;
+            const formData = new FormData(form);
             
-            // Create FormData
-            const formData = new FormData();
-            formData.append('file', document.getElementById('fileInput').files[0]);
-            formData.append('website_url', document.getElementById('urlInput').value);
-            formData.append('num_programs', document.getElementById('programsInput').value);
-
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('exportContainer').classList.add('hidden');
+            
             try {
                 const response = await fetch('/predict', {
                     method: 'POST',
                     body: formData
                 });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
                 
-                if (data.error) {
-                    throw new Error(data.error);
-                }
+                const data = await response.json();
+                programData = data; // Store the data globally
+                
+                // Display results in a formatted way
+                const resultsDiv = document.getElementById('results');
+                
+                if (data.status === "success") {
+                    let html = `
+                        <div class="bg-green-50 p-4 rounded-md mb-4">
+                            <p class="text-green-700">${data.message}</p>
+                            <p class="text-green-600 text-sm">${data.note}</p>
+                        </div>
+                    `;
+                    
+                    // For each department
+                    Object.entries(data.results).forEach(([dept, info]) => {
+                        html += `
+                            <div class="border rounded-lg p-4 mb-4 bg-white">
+                                <h2 class="text-xl font-bold mb-2">${dept}</h2>
+                                <p class="text-gray-600 mb-4">
+                                    ${info.total_positions} total positions • 
+                                    ${info.unique_positions} unique positions
+                                </p>
+                                
+                                <div class="space-y-4">
+                        `;
+                        
+                        // Parse the content string into individual programs
+                        if (info.programs && info.programs.content) {
+                            console.log('Program Text for', dept, ':', info.programs.content); // Debug log
+                            try {
+                                const programText = info.programs.content;
+                                const programs = programText.split(/\n(?=\d+\.[\s]*(?:Program Name:|[A-Za-z]|$))/).filter(p => {
+                                    const trimmed = p.trim();
+                                    return trimmed && !trimmed.startsWith('Program Name:');
+                                });
+                                
+                                programs.forEach((program, index) => {
+                                    const lines = program.split('\n');
+                                    const programData = {
+                                        name: '',
+                                        description: '',
+                                        positions: '',
+                                        alignment: ''
+                                    };
+                                    
+                                    let currentSection = null;
+                                    
+                                    lines.forEach(line => {
+                                        line = line.trim();
+                                        if (line.match(/^\d+\.\s*Program Name:/)) {
+                                            programData.name = line.split('Program Name:')[1].trim();
+                                        } else if (line.startsWith('Description:')) {
+                                            currentSection = 'description';
+                                            programData.description = line.replace('Description:', '').trim();
+                                        } else if (line.startsWith('Key Positions:')) {
+                                            currentSection = 'positions';
+                                            programData.positions = line.replace('Key Positions:', '').trim();
+                                        } else if (line.includes('Website Alignment:')) {
+                                            currentSection = 'alignment';
+                                            programData.alignment = line.replace('Website Alignment:', '').trim();
+                                        } else if (line && currentSection) {
+                                            programData[currentSection] += ' ' + line.trim();
+                                        }
+                                    });
 
-                // Display results
-                resultsDiv.innerHTML = `
-                    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        ${data.map(program => `
-                            <div class="bg-white p-4 rounded-lg shadow">
-                                <h3 class="font-bold text-lg mb-2">${program.name}</h3>
-                                <p class="text-gray-600 mb-2">${program.description}</p>
-                                <div class="text-sm text-gray-500">
-                                    <p>Budget: ${program.budget}</p>
-                                    <p>Timeline: ${program.timeline}</p>
+                                    html += `
+                                        <div class="border-l-4 border-indigo-500 pl-4 py-4 mb-6 bg-white rounded-r-lg shadow-sm">
+                                            <h3 class="font-semibold text-xl text-indigo-900">
+                                                ${index + 1}. ${programData.name || 'Program Name'}
+                                            </h3>
+                                            
+                                            <div class="ml-4 space-y-4 mt-4">
+                                                <div class="program-section">
+                                                    <h4 class="font-medium text-gray-700">Program Description:</h4>
+                                                    <p class="mt-1 text-gray-600">
+                                                        ${programData.description || 'No description available'}
+                                                    </p>
+                                                </div>
+
+                                                <div class="program-section">
+                                                    <h4 class="font-medium text-gray-700">Key Positions Involved:</h4>
+                                                    <p class="mt-1 text-gray-600">
+                                                        ${programData.positions || 'No positions specified'}
+                                                    </p>
+                                                </div>
+
+                                                <div class="program-section">
+                                                    <h4 class="font-medium text-gray-700">Website Alignment:</h4>
+                                                    <p class="mt-1 text-gray-600">
+                                                        ${programData.alignment || 'No alignment information available'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                            } catch (error) {
+                                console.error('Error parsing programs:', error);
+                                html += `
+                                    <div class="bg-red-50 p-4 rounded-md">
+                                        <p class="text-red-700">Error parsing program data</p>
+                                        <p class="text-red-600 text-sm">Please check the program format</p>
+                                    </div>
+                                `;
+                            }
+                        }
+                        
+                        html += `
                                 </div>
                             </div>
-                        `).join('')}
-                    </div>
-                    <button onclick="exportToExcel(${JSON.stringify(data)})" 
-                            class="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-                        Export to Excel
-                    </button>
-                `;
-
+                        `;
+                    });
+                    
+                    resultsDiv.innerHTML = html;
+                    // Show export button
+                    document.getElementById('exportContainer').classList.remove('hidden');
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="bg-red-50 p-4 rounded-md">
+                            <p class="text-red-700">${data.message}</p>
+                            <p class="text-red-600 text-sm">${data.details || ''}</p>
+                        </div>
+                    `;
+                }
             } catch (error) {
-                resultsDiv.innerHTML = `
-                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                        Error: ${error.message}
+                console.error('Error:', error);
+                document.getElementById('results').innerHTML = `
+                    <div class="bg-red-50 p-4 rounded-md">
+                        <p class="text-red-700">Error processing request</p>
+                        <p class="text-red-600 text-sm">${error.message}</p>
                     </div>
                 `;
+            } finally {
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
             }
         });
-
-        function exportToExcel(data) {
-            // Create workbook
-            const wb = XLSX.utils.book_new();
-            
-            // Convert data to worksheet format
-            const wsData = data.map(program => ({
-                'Program Name': program.name,
-                'Description': program.description,
-                'Budget': program.budget,
-                'Timeline': program.timeline
-            }));
-            
-            // Create worksheet
-            const ws = XLSX.utils.json_to_sheet(wsData);
-            
-            // Add worksheet to workbook
-            XLSX.utils.book_append_sheet(wb, ws, "Programs");
-            
-            // Save file
-            XLSX.writeFile(wb, "program_predictions.xlsx");
-        }
     </script>
 </body>
 </html>

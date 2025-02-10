@@ -1,18 +1,22 @@
-from fastapi import FastAPI, File, Form, UploadFile
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, File, UploadFile, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-import json
-from typing import List
-import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+import uvicorn
 from pathlib import Path
 import tempfile
-from ..core.processor import ProgramPredictor
+import shutil
+import sys
+import os
 
-app = FastAPI()
+# Add the parent directory to the Python path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from gov_program_predictor.core.processor import ProgramPredictor
 
-# Configure CORS
+app = FastAPI(title="Government Program Predictor")
+
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,14 +25,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Set up template and static file serving
-templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Get the absolute path to the project root
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+TEMPLATES_DIR = PROJECT_ROOT / "templates"
+STATIC_DIR = PROJECT_ROOT / "static"
+
+# Ensure directories exist
+TEMPLATES_DIR.mkdir(exist_ok=True)
+STATIC_DIR.mkdir(exist_ok=True)
+UPLOAD_DIR = PROJECT_ROOT / "temp_uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+# Set up templates and static files
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request):
-    """Serve the main application page"""
-    return templates.TemplateResponse("index.html", {"request": request})
+async def home(request: Request):
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request}
+    )
 
 @app.post("/predict")
 async def predict_programs(
@@ -36,36 +53,70 @@ async def predict_programs(
     website_url: str = Form(...),
     num_programs: int = Form(...)
 ):
-    """Generate program predictions based on department data"""
-    try:
-        # Create temporary file to store upload
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
-            # Write uploaded file content
-            content = await file.read()
-            tmp_file.write(content)
-            tmp_file.flush()
-            
-            try:
-                # Initialize predictor
-                predictor = ProgramPredictor(
-                    excel_path=tmp_file.name,
-                    website_url=website_url
-                )
-                
-                # Generate predictions
-                programs = predictor.predict(num_programs)
-                
-                return programs
-                
-            finally:
-                # Clean up temporary file
-                os.unlink(tmp_file.name)
+    # Save uploaded file
+    temp_path = UPLOAD_DIR / file.filename
+    with temp_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
     
-    except Exception as e:
-        return {"error": str(e)}
+    try:
+        # Create predictor instance
+        predictor = ProgramPredictor()
+        
+        # Process the file
+        df, metadata = predictor.process_personnel_data(temp_path)
+        
+        # Try to get website content, but continue even if it fails
+        try:
+            website_content = {"url": website_url}
+        except Exception as web_error:
+            print(f"Warning: Could not fetch website content: {str(web_error)}")
+            website_content = {
+                'main_content': [],
+                'department_specific': [
+                    "Note: Website content could not be accessed. Predictions will be based on position data only."
+                ]
+            }
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    """Simple health check endpoint"""
-    return {"status": "healthy"}
+        # Generate predictions for each department
+        results = {}
+        for dept in metadata['departments']:
+            dept_df = df[df['Department'] == dept]
+            predictions = predictor.predict_programs_for_department(
+                dept_df,
+                website_url,
+                num_programs
+            )
+            
+            # Clean up the predictions output for better display
+            results[dept] = {
+                'programs': {'content': predictions},
+                'total_positions': len(dept_df),
+                'unique_positions': dept_df['Position Name'].nunique()
+            }
+        
+        return {
+            "status": "success",
+            "message": "Analysis complete",
+            "note": "Website content unavailable – predictions based on position data only" if 'Note:' in str(website_content) else "",
+            "results": results,
+            "metadata": {
+                "total_positions": metadata['total_positions'],
+                "departments": metadata['departments'],
+                "departments_analyzed": len(metadata['departments'])
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "details": "An error occurred while processing your request. Please check your input data and try again."
+        }
+    
+    finally:
+        # Clean up
+        if temp_path.exists():
+            temp_path.unlink()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

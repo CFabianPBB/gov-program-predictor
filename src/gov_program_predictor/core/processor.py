@@ -1,129 +1,140 @@
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
 import pandas as pd
-import openai
 import os
-from typing import List, Dict, Any
-import requests
-from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables
+load_dotenv()
 
 class ProgramPredictor:
-    def __init__(self, excel_path: str, website_url: str):
-        """
-        Initialize the ProgramPredictor
-        
-        Args:
-            excel_path: Path to Excel file containing staff data
-            website_url: URL of the government department website
-        """
-        self.excel_path = excel_path
-        self.website_url = website_url
-        self.staff_data = None
-        self.website_content = None
-        
-        # Initialize OpenAI key
-        self.api_key = os.getenv('OPENAI_API_KEY')
-        if not self.api_key:
-            raise ValueError("OpenAI API key not found in environment variables")
-        
-        openai.api_key = self.api_key
+    def __init__(self, model_name="gpt-4-turbo-preview"):
+        self.llm = ChatOpenAI(
+            model=model_name,
+            temperature=0.7
+        )
 
-    def _load_staff_data(self) -> None:
-        """Load and process staff data from Excel file"""
+    def process_personnel_data(self, file_path: Path) -> tuple[pd.DataFrame, dict]:
+        """Process personnel data from Excel file."""
         try:
-            df = pd.read_excel(self.excel_path)
+            # Read the Excel file
+            print(f"Reading file: {file_path}")
+            df = pd.read_excel(file_path)
             
-            # Group staff by position
-            position_summary = df.groupby('Position').agg({
-                'Department': 'count',
-                'Skills': lambda x: ', '.join(set(filter(None, x)))
-            }).reset_index()
+            # Clean column names
+            df.columns = df.columns.str.strip().str.replace('\n', ' ').str.replace('\r', '')
+            print("Available columns:", df.columns.tolist())
             
-            position_summary.columns = ['Position', 'Count', 'Combined_Skills']
-            self.staff_data = position_summary
+            # Basic data validation
+            required_columns = ['Department', 'Division', 'Position Name']
+            print("Required columns:", required_columns)
+            print("Column name exact comparison:")
+            for col in required_columns:
+                print(f"Looking for '{col}' in columns:", [f"'{c}'" for c in df.columns])
+                if col not in df.columns:
+                    raise ValueError(f"Required column '{col}' not found in the Excel file")
+            
+            # Generate metadata about the file
+            try:
+                departments = df['Department'].unique().tolist()
+                print("Unique departments found:", departments)
+                
+                metadata = {
+                    'total_positions': len(df),
+                    'departments': departments,
+                    'divisions': df['Division'].unique().tolist(),
+                    'unique_titles': df['Position Name'].nunique()
+                }
+                
+                print("Generated metadata:", metadata)
+                return df, metadata
+                
+            except Exception as e:
+                print(f"Error while generating metadata: {str(e)}")
+                raise
             
         except Exception as e:
-            raise Exception(f"Error loading staff data: {str(e)}")
+            print(f"Error processing file: {str(e)}")
+            print(f"File path: {file_path}")
+            print(f"File exists: {file_path.exists()}")
+            raise
 
-    def _fetch_website_content(self) -> None:
-        """Fetch and process content from department website"""
+    def predict_programs_for_department(self, df: pd.DataFrame, website_url: str, programs_per_department: int) -> str:
+        """Predict programs based on personnel data and website."""
         try:
-            response = requests.get(self.website_url)
-            response.raise_for_status()
+            prompt = ChatPromptTemplate.from_template("""
+Based on the following department personnel data and website:
+
+Personnel Data:
+{personnel_data}
+
+Website: {website_url}
+
+Generate {programs_per_department} detailed program descriptions that this department could realistically implement.
+
+For each program, use exactly this format:
+
+1. Program Name: [name]
+Description: [description]
+Key Positions: [positions]
+Website Alignment: [alignment]
+
+2. Program Name: [name]
+Description: [description]
+Key Positions: [positions]
+Website Alignment: [alignment]
+
+(and so on for each program)
+
+Make sure to include the numbered prefix and exact section headers as shown above.
+""")
             
-            soup = BeautifulSoup(response.text, 'html.parser')
+            # Convert DataFrame to string representation
+            personnel_str = df.to_string()
             
-            # Extract text content
-            text_content = []
-            for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'li']):
-                text_content.append(tag.get_text().strip())
+            # Create the chain and invoke it
+            chain = prompt | self.llm
             
-            self.website_content = ' '.join(text_content)
+            result = chain.invoke({
+                "personnel_data": personnel_str,
+                "website_url": website_url,
+                "programs_per_department": programs_per_department
+            })
+            
+            return result.content
             
         except Exception as e:
-            raise Exception(f"Error fetching website content: {str(e)}")
+            print(f"Error predicting programs: {str(e)}")
+            raise
 
-    def _generate_prompt(self) -> str:
-        """Generate prompt for OpenAI"""
-        staff_summary = self.staff_data.to_string()
+    def test_connection(self):
+        """Test the connection to OpenAI."""
+        prompt = ChatPromptTemplate.from_template(
+            "Return the phrase 'Connection successful!' if you receive this message."
+        )
+        chain = prompt | self.llm
+        return chain.invoke({})
+
+# Test the processing
+if __name__ == "__main__":
+    predictor = ProgramPredictor()
+    try:
+        # First test the OpenAI connection
+        response = predictor.test_connection()
+        print("API Test result:", response)
         
-        prompt = f"""Based on the following department staff data and website content, suggest {self.num_programs} innovative government programs:
-
-Staff Information:
-{staff_summary}
-
-Department Website Content Summary:
-{self.website_content[:1000]}  # Limit website content length
-
-For each program, provide:
-1. Program Name
-2. Description (2-3 sentences)
-3. Estimated Budget Range
-4. Implementation Timeline
-5. Key Staff Positions Required
-
-Format each program as a JSON object with keys: name, description, budget, timeline, required_positions"""
-
-        return prompt
-
-    def predict(self, num_programs: int = 3) -> List[Dict[str, Any]]:
-        """
-        Generate program predictions
+        # Then test file processing
+        file_path = Path('Sample Data - Personnel.xlsx')
+        df, metadata = predictor.process_personnel_data(file_path)
         
-        Args:
-            num_programs: Number of programs to generate
-            
-        Returns:
-            List of dictionaries containing program details
-        """
-        try:
-            self.num_programs = num_programs
-            
-            # Load and process data
-            self._load_staff_data()
-            self._fetch_website_content()
-            
-            # Generate predictions using OpenAI
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a government program planning expert."},
-                    {"role": "user", "content": self._generate_prompt()}
-                ],
-                temperature=0.7,
-                max_tokens=2000
-            )
-            
-            # Parse response
-            content = response.choices[0].message.content
-            
-            # Extract JSON from response
-            start_idx = content.find('[')
-            end_idx = content.rfind(']') + 1
-            json_str = content[start_idx:end_idx]
-            
-            # Parse JSON into list of programs
-            programs = eval(json_str)  # Using eval since OpenAI response might not be valid JSON
-            
-            return programs
-            
-        except Exception as e:
-            raise Exception(f"Error in prediction process: {str(e)}")
+        # Show sample of the data
+        print("\nFirst few rows of the data:")
+        print(df.head())
+        
+        # Print metadata
+        print("\nMetadata:")
+        print(metadata)
+        
+    except Exception as e:
+        print("Error:", str(e))
