@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 import json
-from typing import List, Optional
+from typing import List
 import os
 from pathlib import Path
 import tempfile
@@ -43,27 +43,29 @@ async def predict_programs(
         # Parse departments JSON
         dept_data = json.loads(departments)
         
-        # Validate we have all required files
-        if len(dept_data) > len(files):
+        if not isinstance(dept_data, list):
             return JSONResponse(
                 status_code=400,
-                content={"error": "Missing files for some departments"}
+                content={"error": "Departments data must be a list"}
+            )
+        
+        # Validate we have all required files
+        if len(dept_data) != len(files):
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Number of files ({len(files)}) does not match number of departments ({len(dept_data)})"}
             )
         
         results = []
         
         # Process each department
-        for i, dept in enumerate(dept_data):
-            if i >= len(files):
-                break
-                
-            file = files[i]
-            
+        for i, (dept, file) in enumerate(zip(dept_data, files)):
             # Validate required fields
-            if not all(key in dept for key in ['name', 'url', 'programs']):
+            required_fields = ['name', 'url', 'programs']
+            if not all(field in dept for field in required_fields):
                 return JSONResponse(
                     status_code=400,
-                    content={"error": f"Missing required fields for department {dept.get('name', f'#{i+1}')}"}
+                    content={"error": f"Missing required fields for department {i+1}. Need: {required_fields}"}
                 )
             
             # Create temporary file
@@ -80,7 +82,8 @@ async def predict_programs(
                     )
                     
                     # Generate predictions
-                    programs = predictor.predict(int(dept['programs']))
+                    num_programs = int(dept['programs'])
+                    programs = predictor.predict(num_programs)
                     
                     # Add results
                     results.append({
@@ -90,14 +93,20 @@ async def predict_programs(
                     
                 finally:
                     # Clean up temporary file
-                    os.unlink(tmp_file.name)
+                    if os.path.exists(tmp_file.name):
+                        os.unlink(tmp_file.name)
         
         return JSONResponse(content=results)
-    
+        
     except json.JSONDecodeError:
         return JSONResponse(
             status_code=400,
-            content={"error": "Invalid departments JSON format"}
+            content={"error": "Invalid JSON format in departments data"}
+        )
+    except ValueError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)}
         )
     except Exception as e:
         return JSONResponse(
@@ -110,3 +119,12 @@ async def predict_programs(
 async def health_check():
     """Simple health check endpoint"""
     return {"status": "healthy"}
+
+# Error handler for all exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Global exception handler for all unhandled errors"""
+    return JSONResponse(
+        status_code=500,
+        content={"error": f"An unexpected error occurred: {str(exc)}"}
+    )
