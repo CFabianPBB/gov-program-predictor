@@ -71,7 +71,7 @@ Personnel Data:
 
 Website: {website_url}
 
-Generate {programs_per_department} detailed program descriptions that this department could realistically implement.
+Generate {programs_per_department} detailed program descriptions that this department is most likely providing.
 
 For each program, use exactly this format:
 
